@@ -1,7 +1,8 @@
-require("viridis")
-require("ggplot2")
-require("corrplot")
-require("progress")
+library(viridis)
+library(ggplot2)
+library(ggbiplot)
+library(corrplot)
+library(progress)
 
 empty_directories <- function(directories) {
   for (directory in directories) {
@@ -121,6 +122,10 @@ correlations_plot <- function(data, numerical_variables, save_to = "") {
   if (not_empty(save_to)) dev.off()
 }
 
+extend <- function(c1, c2){
+  paste(c1,c2,sep = "")
+}
+
 principal_components <- function(data, numerical_variables, save_to = "") {
   numerical_variables[["Proportion"]] <- FALSE
   
@@ -147,4 +152,79 @@ principal_components <- function(data, numerical_variables, save_to = "") {
   if (not_empty(save_to)) dev.off()
   
   return(pca)
+}
+
+variable_histogram <- function(data, variable, save_to = "") {
+  save_png(data, variable, save_to, histogram)
+}
+
+variable_qqplot <- function(data, variable, save_to = "") {
+  save_png(data, variable, save_to, quantile_quantile)
+}
+
+save_png <- function(data, variable, save_to, function_to_create_image) {
+  if (not_empty(save_to)) png(save_to)
+  function_to_create_image(data, variable)
+  if (not_empty(save_to)) dev.off()
+}
+
+histogram <- function(data, variable) {
+  hist(data[, variable], main = "Histogram", xlab = "Proportion")
+}
+
+quantile_quantile <- function(data, variable) {
+  qqnorm(data[, variable], main = "Normal QQ-Plot for Proportion")
+  qqline(data[, variable])
+}
+
+generate_combinations_unvectorized <- function(variables,
+                                               min_percentage,
+                                               max_percentage) {
+  variables[["Proportion"]] <- FALSE
+  variables                 <- names(variables[variables == TRUE])
+  n                         <- length(variables)
+  n_min                     <- floor(n * min_percentage)
+  n_max                     <- ceiling(n * max_percentage)
+  all_combinations          <- NULL
+  
+  progress_bar <- progress_bar$new(
+    format = "Progress [:bar] :percent ETA: :eta",
+    total = length(n_min:n_max)
+  )
+  
+  for (k in n_min:n_max) {
+    progress_bar$tick()
+    combinations <- combn(variables, k)
+    for (column in 1:ncol(combinations)) {
+      new_list <- list(combinations[, column])
+      all_combinations <- c(all_combinations, list(new_list))
+    }
+  }
+  return(unlist(all_combinations, recursive = FALSE))
+}
+
+generate_combinations_vectorized <- function(variables,
+                                             min_percentage,
+                                             max_percentage) {
+  variables[["Proportion"]] <- FALSE
+  variables <- names(variables[variables == TRUE])
+  
+  n       <- length(variables)
+  n_min   <- floor(n * min_percentage)
+  n_max   <- ceiling(n * max_percentage)
+  
+  progress_bar <- progress_bar$new(
+    format = "Progress [:bar] :percent ETA: :eta",
+    total = length(n_min:n_max)
+  )
+  
+  all_combinations <- unlist(
+    lapply(lapply(n_min:n_max, function(k) {
+      progress_bar$tick()
+      return(combn(variables, k))
+    }),
+    function(y) unlist(apply(y, 2, list), recursive = FALSE)),
+    recursive = FALSE
+  )
+  return(all_combinations)
 }
